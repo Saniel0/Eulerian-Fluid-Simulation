@@ -34,10 +34,13 @@ Solver::~Solver() {
 }
 
 void Solver::iterate_compression() {
-    for (int i = 0; i < iters; ++i) {
+    for (int i = 0; i < iters * 2; ++i) {
         // do not process border cells
         for (int h = 1; h < height - 1; ++h) {
             for (int w = 1; w < width - 1; ++w) {
+                if ((w+h) % 2 == i % 2) {
+                    continue;
+                }
                 // if there is object in the cell
                 if (grid_s[coord(w, h)] == 0) {
                     continue;
@@ -57,7 +60,7 @@ void Solver::iterate_compression() {
                 grid_v[coord(w, h+1)] -= s_down * p;
                 grid_u[coord(w, h)] += s_left * p;
                 grid_u[coord(w+1, h)] -= s_right * p;
-            } 
+            }
         }
     }
 }
@@ -163,8 +166,12 @@ void Solver::wind_tunnel() {
     for (int i = (height / 2) - (height / 16); i < (height / 2) + (height / 16); ++i) {
         grid_m[coord(0, i)] = 1.0;
         grid_m[coord(1, i)] = 1.0;
+        grid_m[coord(2, i)] = 1.0;
+        grid_m[coord(3, i)] = 1.0;
         tmp_m[coord(0, i)] = 1.0;
         tmp_m[coord(1, i)] = 1.0;
+        tmp_m[coord(2, i)] = 1.0;
+        tmp_m[coord(3, i)] = 1.0;
     }
 
     for (int h = 0; h < height; ++h) {

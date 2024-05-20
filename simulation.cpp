@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
     View *view = new View(WIDTH * SCALING, HEIGHT * SCALING, WIDTH, HEIGHT, FPS);
     view->open_window();
 
-    Solver *sim = new Solver(WIDTH, HEIGHT, 40, 1.9, 1.0/5);
+    Solver *sim = new Solver(WIDTH, HEIGHT, 40, 1.95, 0.4);
     sim->wind_tunnel();
 
     bool running = true;
