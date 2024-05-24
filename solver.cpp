@@ -1,4 +1,6 @@
 #include <math.h>
+#include <algorithm>
+#include <iostream>
 
 #include "solver.h"
 
@@ -83,6 +85,8 @@ void Solver::advect_velocities() {
                 // backtrack based on timestep
                 float x = (float) w - (u * dt);
                 float y = (float) h - (v * dt);
+                x = std::max(std::min(x, (float) (width-1)), (float) 1.0);
+                y = std::max(std::min(y, (float) (height-1)), (float) 1.0);
                 if (grid_s[coord((int) x, (int) y)] != 0) {
                     int idx = (int) x;
                     int idy = (int) y;
@@ -102,6 +106,8 @@ void Solver::advect_velocities() {
                 // backtrack based on timestep
                 float x = (float) w - (u * dt);
                 float y = (float) h - (v * dt);
+                x = std::max(std::min(x, (float) (width-1)), (float) 1.0);
+                y = std::max(std::min(y, (float) (height-1)), (float) 1.0);
                 if (grid_s[coord((int) x, (int) y)] != 0) {
                     int idx = (int) x;
                     int idy = (int) y;
@@ -130,12 +136,14 @@ void Solver::advect_smoke() {
         for (int w = 1; w < width - 1; ++w) {
             // if not object cell
             if (grid_s[coord(w, h)] != 0) {
-                tmp_m[coord(w, h)] = grid_m[coord(w, h)];
+                //tmp_m[coord(w, h)] = grid_m[coord(w, h)];
                 float v = (grid_v[coord(w, h)] + grid_v[coord(w, h+1)]) / 2;  
                 float u = (grid_u[coord(w, h)] + grid_u[coord(w+1, h)]) / 2;
                 float x = (float) w - (u * dt);
                 float y = (float) h - (v * dt);
-                if (grid_s[coord((int) x, (int) y)] != 0) {
+                x = std::max(std::min(x, (float) (width-1)), (float) 0.0);
+                y = std::max(std::min(y, (float) (height-1)), (float) 0.0);
+                if (grid_s[coord((int) x, (int) y)] != 0 || ((int) x) == 0) {
                     int idx = (int) x;
                     int idy = (int) y;
                     float ratio_x = x - idx;
@@ -157,8 +165,8 @@ void Solver::wind_tunnel() {
     for (int i = 0; i < width * height; ++i) {
         grid_v[i] = 0;
         tmp_v[i] = 0;
-        grid_u[i] = 4.0;
-        tmp_u[i] = 4.0;
+        grid_u[i] = 8.0;
+        tmp_u[i] = 8.0;
         grid_m[i] = 0;
         tmp_m[i] = 0;
     }
@@ -166,12 +174,8 @@ void Solver::wind_tunnel() {
     for (int i = (height / 2) - (height / 16); i < (height / 2) + (height / 16); ++i) {
         grid_m[coord(0, i)] = 1.0;
         grid_m[coord(1, i)] = 1.0;
-        grid_m[coord(2, i)] = 1.0;
-        grid_m[coord(3, i)] = 1.0;
         tmp_m[coord(0, i)] = 1.0;
         tmp_m[coord(1, i)] = 1.0;
-        tmp_m[coord(2, i)] = 1.0;
-        tmp_m[coord(3, i)] = 1.0;
     }
 
     for (int h = 0; h < height; ++h) {
