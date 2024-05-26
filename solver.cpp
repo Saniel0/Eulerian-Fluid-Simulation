@@ -136,7 +136,7 @@ void Solver::advect_smoke() {
         for (int w = 1; w < width - 1; ++w) {
             // if not object cell
             if (grid_s[coord(w, h)] != 0) {
-                //tmp_m[coord(w, h)] = grid_m[coord(w, h)];
+                tmp_m[coord(w, h)] = grid_m[coord(w, h)];
                 float v = (grid_v[coord(w, h)] + grid_v[coord(w, h+1)]) / 2;  
                 float u = (grid_u[coord(w, h)] + grid_u[coord(w+1, h)]) / 2;
                 float x = (float) w - (u * dt);

@@ -33,15 +33,15 @@ int main(int argc, char* argv[]) {
 
         Uint32 time = SDL_GetTicks();
         sim->iterate_compression();
-        std::cout << SDL_GetTicks() - time << ' ';
+        //std::cout << SDL_GetTicks() - time << ' ';
         sim->advect_velocities();
-        std::cout << SDL_GetTicks() - time << ' ';
+        //std::cout << SDL_GetTicks() - time << ' ';
         sim->advect_smoke();
-        std::cout << SDL_GetTicks() - time << '\t';
+        //std::cout << SDL_GetTicks() - time << '\t';
 
         view->update_frame(sim->get_frame());
     }
 
-    //view->close_window();
+    view->close_window();
     return 0;
 }

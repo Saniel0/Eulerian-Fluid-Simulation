@@ -6,12 +6,12 @@ __device__ __host__ inline int coord(int w, int h, int width) {
 }
 
 Solver_cuda::Solver_cuda(int w, int h, int iters, float relax_factor, float dt) {
-    this->width = w + 2;
+    this->width = w + 2; // +2 for border
     this->height = h + 2;
     this->iters = iters;
     this->relax_factor = relax_factor;
     this->dt = dt;
-    // allocate memory on gpu
+    // allocate memory on GPU (device)
     cudaMalloc(&grid_s, width * height * sizeof(uint8_t));
     cudaMalloc(&grid_u, width * height * sizeof(float));
     cudaMalloc(&tmp_u, width * height * sizeof(float));
@@ -20,7 +20,7 @@ Solver_cuda::Solver_cuda(int w, int h, int iters, float relax_factor, float dt) 
     cudaMalloc(&grid_m, width * height * sizeof(float));
     cudaMalloc(&tmp_m, width * height * sizeof(float));
     cudaMalloc(&frame_data, w * h * sizeof(float));
-    
+    // allocate memory on CPU (host)
     this->frame_data_host = new uint8_t[w * h];
 }
 
@@ -32,14 +32,15 @@ Solver_cuda::~Solver_cuda() {
     cudaFree(tmp_v);
     cudaFree(grid_m);
     cudaFree(tmp_m);
+    delete[] frame_data_host;
 }
 
 __global__ void iterate_compression_kernel(uint8_t *grid_s, float *grid_u, float *grid_v, int width, int height, float relax_factor, int iteration) {
     int w = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int h = blockIdx.y * blockDim.y + threadIdx.y + 1;
-
+    // check bounds
     if (w >= width - 1 || h >= height - 1) return;
-
+    // check if we are on correct cell
     if ((w + h) % 2 == iteration % 2) return;
 
     if (grid_s[h * width + w] == 0) return;
@@ -74,52 +75,52 @@ void Solver_cuda::iterate_compression() {
 __global__ void advect_velocities_kernel(uint8_t *grid_s, float *grid_u, float *grid_v, float *tmp_u, float *tmp_v, int width, int height, float dt) {
     int w = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int h = blockIdx.y * blockDim.y + threadIdx.y + 1;
-    if (w >= width - 1 || w == 0 || h == 0 || h >= height - 1) return;
+    if (w >= width - 1 || h >= height - 1) return;
     // if there is collision object
     if (grid_s[coord(w, h, width)] == 0) return;
     tmp_v[coord(w, h, width)] = grid_v[coord(w, h, width)];
     tmp_u[coord(w, h, width)] = grid_u[coord(w, h, width)];
-    if (grid_s[coord(w-1, h, width)] != 0) {
-        if (grid_s[coord(w, h-1, width)] != 0) {
-            float v = grid_v[coord(w, h, width)];
-            // get u part of the vector by avareging 4 surrounding 'u's
-            float u = (grid_u[coord(w, h-1, width)] + grid_u[coord(w+1, h-1, width)] + grid_u[coord(w, h, width)] + grid_u[coord(w+1, h, width)]) / 4;
-            // backtrack based on timestep
-            float x = (float) w - (u * dt);
-            float y = (float) h - (v * dt);
-            x = max(min(x, (float) (width-1)), (float) 1.0);
-            y = max(min(y, (float) (height-1)), (float) 1.0);
-            if (grid_s[coord((int) x, (int) y, width)] != 0) {
-                int idx = (int) x;
-                int idy = (int) y;
-                float ratio_x = x - idx;
-                float ratio_y = y - idy;
-                float tmp1 = (grid_v[coord(idx, idy, width)] * (1.0 - ratio_x)) + (grid_v[coord(idx+1, idy, width)] * ratio_x);
-                float tmp2 = (grid_v[coord(idx, idy+1, width)] * (1.0 - ratio_x)) + (grid_v[coord(idx+1, idy+1, width)] * ratio_x);
-                float tmp = (tmp1 * (1.0 - ratio_y)) + (tmp2 * ratio_y);
-                tmp_v[coord(w, h, width)] = tmp;
-            }
+    if (grid_s[coord(w, h-1, width)] != 0) {
+        float v = grid_v[coord(w, h, width)];
+        // get u part of the vector by avareging 4 surrounding 'u's
+        float u = (grid_u[coord(w, h-1, width)] + grid_u[coord(w+1, h-1, width)] + grid_u[coord(w, h, width)] + grid_u[coord(w+1, h, width)]) / 4;
+        // backtrack based on timestep
+        float x = (float) w - (u * dt);
+        float y = (float) h - (v * dt);
+        // correct if backtracked coordinates are out of bounds
+        x = max(min(x, (float) (width-1)), (float) 1.0);
+        y = max(min(y, (float) (height-1)), (float) 1.0);
+        if (grid_s[coord((int) x, (int) y, width)] != 0) {
+            int idx = (int) x;
+            int idy = (int) y;
+            float ratio_x = x - idx;
+            float ratio_y = y - idy;
+            float tmp1 = (grid_v[coord(idx, idy, width)] * (1.0 - ratio_x)) + (grid_v[coord(idx+1, idy, width)] * ratio_x);
+            float tmp2 = (grid_v[coord(idx, idy+1, width)] * (1.0 - ratio_x)) + (grid_v[coord(idx+1, idy+1, width)] * ratio_x);
+            float tmp = (tmp1 * (1.0 - ratio_y)) + (tmp2 * ratio_y);
+            tmp_v[coord(w, h, width)] = tmp;
         }
-        // if there is not obstacle leftwards
-        if (grid_s[coord(w-1, h, width)] != 0) {
-            float u = grid_u[coord(w, h, width)];
-            // get v part of the vector by avareging 4 surrounding 'v's
-            float v = (grid_v[coord(w-1, h, width)] + grid_v[coord(w, h, width)] + grid_v[coord(w-1, h+1, width)] + grid_v[coord(w, h+1, width)]) / 4;
-            // backtrack based on timestep
-            float x = (float) w - (u * dt);
-            float y = (float) h - (v * dt);
-            x = max(min(x, (float) (width-1)), (float) 1.0);
-            y = max(min(y, (float) (height-1)), (float) 1.0);
-            if (grid_s[coord((int) x, (int) y, width)] != 0) {
-                int idx = (int) x;
-                int idy = (int) y;
-                float ratio_x = x - idx;
-                float ratio_y = y - idy;
-                float tmp1 = (grid_u[coord(idx, idy, width)] * (1.0 - ratio_x)) + (grid_u[coord(idx+1, idy, width)] * ratio_x);
-                float tmp2 = (grid_u[coord(idx, idy+1, width)] * (1.0 - ratio_x)) + (grid_u[coord(idx+1, idy+1, width)] * ratio_x);
-                float tmp = (tmp1 * (1.0 - ratio_y)) + (tmp2 * ratio_y);
-                tmp_u[coord(w, h, width)] = tmp;
-            }
+    }
+    // if there is not obstacle leftwards
+    if (grid_s[coord(w-1, h, width)] != 0) {
+        float u = grid_u[coord(w, h, width)];
+        // get v part of the vector by avareging 4 surrounding 'v's
+        float v = (grid_v[coord(w-1, h, width)] + grid_v[coord(w, h, width)] + grid_v[coord(w-1, h+1, width)] + grid_v[coord(w, h+1, width)]) / 4;
+        // backtrack based on timestep
+        float x = (float) w - (u * dt);
+        float y = (float) h - (v * dt);
+        // correct if backtracked coordinates are out of bounds
+        x = max(min(x, (float) (width-1)), (float) 1.0);
+        y = max(min(y, (float) (height-1)), (float) 1.0);
+        if (grid_s[coord((int) x, (int) y, width)] != 0) {
+            int idx = (int) x;
+            int idy = (int) y;
+            float ratio_x = x - idx;
+            float ratio_y = y - idy;
+            float tmp1 = (grid_u[coord(idx, idy, width)] * (1.0 - ratio_x)) + (grid_u[coord(idx+1, idy, width)] * ratio_x);
+            float tmp2 = (grid_u[coord(idx, idy+1, width)] * (1.0 - ratio_x)) + (grid_u[coord(idx+1, idy+1, width)] * ratio_x);
+            float tmp = (tmp1 * (1.0 - ratio_y)) + (tmp2 * ratio_y);
+            tmp_u[coord(w, h, width)] = tmp;
         }
     }
 }
@@ -142,7 +143,7 @@ void Solver_cuda::advect_velocities() {
 __global__ void advect_smoke_kernel(uint8_t *grid_s, float *grid_u, float *grid_v, float *grid_m, float *tmp_m, int width, int height, float dt) {
     int w = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int h = blockIdx.y * blockDim.y + threadIdx.y + 1;
-    if (w >= width - 1 || w == 0 || h == 0 || h >= height - 1) return;
+    if (w >= width - 1 || h >= height - 1) return;
     // if there is collision object
     if (grid_s[coord(w, h, width)] == 0) return;
     tmp_m[coord(w, h, width)] = grid_m[coord(w, h, width)];
@@ -150,6 +151,7 @@ __global__ void advect_smoke_kernel(uint8_t *grid_s, float *grid_u, float *grid_
     float u = (grid_u[coord(w, h, width)] + grid_u[coord(w+1, h, width)]) / 2;
     float x = (float) w - (u * dt);
     float y = (float) h - (v * dt);
+    // correct if backtracked coordinates are out of bounds
     x = max(min(x, (float) (width-1)), (float) 0.0);
     y = max(min(y, (float) (height-1)), (float) 0.0);
     if (grid_s[coord((int) x, (int) y, width)] != 0 || ((int) x) == 0) {
