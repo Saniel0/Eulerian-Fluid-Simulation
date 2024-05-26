@@ -165,8 +165,8 @@ void Solver::wind_tunnel() {
     for (int i = 0; i < width * height; ++i) {
         grid_v[i] = 0;
         tmp_v[i] = 0;
-        grid_u[i] = 8.0;
-        tmp_u[i] = 8.0;
+        grid_u[i] = 16.0;
+        tmp_u[i] = 16.0;
         grid_m[i] = 0;
         tmp_m[i] = 0;
     }
