@@ -38,10 +38,11 @@ Solver_cuda::~Solver_cuda() {
 __global__ void iterate_compression_kernel(uint8_t *grid_s, float *grid_u, float *grid_v, int width, int height, float relax_factor, int iteration) {
     int w = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int h = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    w = (w * 2) + ((h + iteration) % 2);
     // check bounds
     if (w >= width - 1 || h >= height - 1) return;
     // check if we are on correct cell
-    if ((w + h) % 2 == iteration % 2) return;
+    //if ((w + h) % 2 == iteration % 2) return;
 
     if (grid_s[h * width + w] == 0) return;
 
@@ -64,10 +65,10 @@ __global__ void iterate_compression_kernel(uint8_t *grid_s, float *grid_u, float
 void Solver_cuda::iterate_compression() {
     // Define block and grid sizes
     dim3 blockDim(16, 16);
-    dim3 gridDim((width + blockDim.x - 1) / blockDim.x, (height + blockDim.y - 1) / blockDim.y);
+    dim3 gridDim((width/2 + blockDim.x - 1) / blockDim.x, (height + blockDim.y - 1) / blockDim.y);
     // Run the iterations with CUDA
     for (int i = 0; i < iters * 2; ++i) {
-        iterate_compression_kernel<<<gridDim, blockDim>>>(grid_s, grid_u, grid_v, width, height, relax_factor, i);
+        iterate_compression_kernel<<<gridDim, blockDim>>>(grid_s, grid_u, grid_v, width, height, relax_factor, i % 2);
         cudaDeviceSynchronize(); // Ensure all threads complete before the next iteration
     }
 }
